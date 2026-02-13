@@ -1,0 +1,60 @@
+<?php
+
+namespace App\Http\Requests\Location;
+
+use App\Http\Requests\BaseFormRequest;
+use Illuminate\Validation\Rule;
+use App\Models\User;
+use App\Models\Location;
+
+class StoreLocationRequest extends BaseFormRequest
+{
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    public function rules(): array
+    {
+        return [
+            'location_name' => ['required', 'string', 'max:255'],
+            'id_location' => ['nullable', 'string', 'max:10', 'unique:locations,id_location'],
+            'building' => ['required', 'string', 'max:255'],
+            'id_person_in_charge' => ['required', Rule::exists('users', 'id_user')->whereIn('role', ['admin', 'moderator'])],
+        ];
+    }
+
+    public function withValidator($validator)
+    {
+        $validator->after(function ($validator) {
+            $userId = $this->id_person_in_charge;
+            $user = User::where('id_user', $userId)->first();
+            if (!$user) {
+                return;
+            }
+            if ($user->role === 'moderator') {
+                $alreadyAssigned = Location::where('id_person_in_charge', $userId)->exists();
+                if ($alreadyAssigned) {
+                    $validator->errors()->add(
+                        'id_person_in_charge',
+                        'Moderator ini sudah menjadi penanggung jawab di lokasi lain.'
+                    );
+                }
+            }
+        });
+    }
+
+    public function messages(): array
+    {
+        return [
+            'location_name.required' => 'Nama lokasi wajib diisi.',
+            'location_name.max' => 'Nama lokasi tidak boleh lebih dari 255 karakter.',
+            'id_location.unique' => 'ID yang dibuat telah digunakan. Coba lagi atau gunakan ID otomatis.',
+            'id_location.max' => 'ID lokasi tidak boleh lebih dari 10 karakter.',
+            'building.required' => 'Nama gedung wajib diisi.',
+            'building.max' => 'Nama gedung tidak boleh lebih dari 255 karakter.',
+            'id_person_in_charge.required' => 'ID pengguna wajib diisi.',
+            'id_person_in_charge.exists' => 'ID pengguna tidak ditemukan atau bukan admin/moderator.',
+        ];
+    }
+}
